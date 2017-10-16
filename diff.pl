@@ -10,6 +10,8 @@
 	ln(X) - natürlicher Logarithmus
 	sin(X) - Sinus von X
 	cos(X) - Cosinus von X
+	asin(X) - Arcus Sinus von X
+	atan(X) - Arcus Tangens von X
 */
 
 diffOP(X,Y,O) :- simplify(X,XS), d(XS,Y,O).
@@ -17,13 +19,14 @@ diffOP(X,Y,O) :- simplify(X,XS), d(XS,Y,O).
 /* Vereinfachung
  ********************/
 % Produkte
-simp(prod(neg(X),Y),neg(Z)) :- simp(prod(X,Y),Z), !.	% (-x)*y = -x*y
-simp(prod(X,neg(Y)),neg(Z)) :- simp(prod(X,Y),Z), !. 	% rev "
+simp(prod(neg(X),Y),neg(Z)) :- Y \= neg(_), simp(prod(X,Y),Z), !.       % (-x)*y = -x*y
+simp(prod(X,neg(Y)),neg(Z)) :- X \= neg(_), simp(prod(X,Y),Z), !.       % rev "
+simp(prod(neg(X),neg(Y)),Z) :- simp(prod(X,Y),Z), !.    % (-x)*(-y) = x*y
 simp(prod(c(1),X),Y) :- simp(X,Y), !.			% 1*x = x
 simp(prod(X,c(1)),Y) :- simp(X,Y), !.			% rev "
 simp(prod(c(0),_),c(0)) :- !.				% 0*_ = 0
 simp(prod(_,c(0)),c(0)) :- !.				% rev "
-simp(prod(X,X),pow(Y,c(2))) :- simp(X,Y), !.
+simp(prod(X,X),Y) :- simp(pow(X,c(2)),Y), !.
 simp(prod(pow(X,Y),X),pow(XS,sum(YS,c(1)))) :- simp(X,XS), simp(Y,YS), !.
 simp(prod(prod(Y,X),X), prod(YS,pow(XS,c(2)))) :- simp(Y,YS), simp(X,XS), !.
 simp(prod(prod(Y,pow(X,Z)),X), prod(YS,pow(XS,ZS))) :- simp(X,XS), simp(Y,YS), simp(sum(Z,c(1)),ZS), !.
@@ -53,6 +56,8 @@ simp(sub(X,c(0)),Y) :- simp(X,Y), !. 	% rev "
 simp(sub(X,X),c(0)) :- !.		% x-x = 0
 simp(sub(c(X),c(Y)),c(Z)) :- number(X), number(Y), Z is X - Y, Z >= 0, !. 	% 4 - 2 = 2
 simp(sub(c(X),c(Y)),neg(c(Z))) :- number(Y), number(X), Z is Y - X, Z >= 0, !.	% 2 - 4 = -2
+simp(sub(neg(c(X)),c(Y)),c(Z)) :- number(X), number(Y), Z is -X - Y, !. % -4 - 2 = -6
+simp(sub(c(X),neg(c(Y))),c(Z)) :- number(X), number(Y), Z is X + Y, !. % 4 - (-2) = 6
 simp(sub(X,neg(Y)),sum(X,Y)) :- !.
 simp(sub(prod(c(X1),Y),prod(c(X2),Y)),E) :- simp(prod(sub(c(X1),c(X2)),Y),E), !.		% 5*x - 4*x = 9*x
 simp(sub(prod(Y,c(X1)),prod(Y,c(X2))),E) :- simp(sub(prod(c(X1),Y),prod(c(X2),Y)),E), !.	% rev "
@@ -61,6 +66,8 @@ simp(sub(prod(c(X1),Y),prod(Y,c(X2))),E) :- simp(sub(prod(c(X1),Y),prod(c(X2),Y)
 
 % Negativ
 simp(neg(neg(X)),Y) :- simp(X,Y), !. % -(-1) = 1
+simp(neg(c(0)),c(0)).
+simp(neg(c(X)),c(Y)) :- number(X), Y is -X, !.
 
 % Hoch
 simp(pow(X,c(1)),Y) :- simp(X,Y), !.	% x^1 = x
@@ -84,6 +91,16 @@ simp(quot(c(0),_),c(0)) :- !.						% 0/_ = 0
 simp(quot(c(X),c(Y)),c(Z)) :- number(X), number(Y), Z is X / Y, !.	% 4/2 = 2
 simp(quot(c(X),prod(c(X),Z)),E) :- simplify(quot(c(1),Z),E), !.		% 4/4*x = 1/x
 simp(quot(c(X),prod(Z,c(X))),E) :- simplify(quot(c(1),Z),E), !.		% rev "
+simp(quot(neg(X),Y),neg(E)) :- simp(quot(X,Y),E), !. % (-6)/2=-(6/2)
+simp(quot(X,neg(Y)),neg(E)) :- simp(quot(X,Y),E), !. % (6)/(-2)=-(6/2)
+
+% Trigonometrie
+simp(sin(c(X)),c(R)) :- number(X), sin(X,R), !.
+simp(cos(c(X)),c(R)) :- number(X), cos(X,R), !.
+simp(asin(c(X)),c(R)) :- number(X), asin(X,R), !.
+simp(atan(c(X)),c(R)) :- number(X), atan(X,R), !.
+simp(sin(neg(X)),R) :- simp(neg(sin(X)),R), !. % sin(-x) = sin(x)
+simp(cos(neg(X)),R) :- simp(cos(X),R), !. % cos(-x) = cos(x)
 
 simp(X,E) :- X =.. [F,A1,A2], simp(A1,E1), simp(A2,E2), E =.. [F,E1,E2], !. % Spalte Terme auf die keine eigene Vereinfachung besitzen (Um die Unterterme zu vereinfachen)
 simp(X,X) :- !. % catchall
@@ -127,6 +144,8 @@ d(quot(X,Y),D,Z) :- d(X,D,Dx), d(Y,D,Dy), simplify(quot(sub(prod(Dx,Y),prod(Dy,X
 % Diff Regeln für Trigonometrie
 d(sin(X),D,Z) :- d(X,D,Dx), simplify(prod(Dx,cos(X)),Z), !.		% sin(x)' -> x' * cos(x)
 d(cos(X),D,Z) :- d(X,D,Dx), simplify(prod(Dx,neg(sin(X))),Z), !.	% cos(x)' -> x' * -sin(x)
+d(asin(X),D,Z) :- simplify(quot(c(1),pow(sub(c(1),pow(X,c(2))),c(0.5))),Da), d(X,D,Dx), simplify(prod(Dx,Da),Z), !. % arccos(x)' -> x' * 1/sqrt(1-x^2)
+d(atan(X),D,Z) :- simplify(quot(c(1),sum(c(1),pow(X,c(2)))),Da), d(X,D,Dx), simplify(prod(Dx,Da),Z), !. % arctan(x)' -> x' * 1/(1+x^2)
 
 % Diff Regeln für ln
 d(ln(X),D,Z) :- d(X,D,Dx), simplify(quot(Dx,X),Z), !.			% ln(x)' -> x' * 1/x
